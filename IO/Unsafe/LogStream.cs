@@ -53,7 +53,8 @@ namespace Nistec.Logging.IO.Unsafe
         private bool m_canSeek;
         private bool m_canWrite;
 
-        private int m_currentFileNum = 1;
+        private LoggerRolling m_Rolling;
+        private int m_currentFileNum = 0;//1;
         private bool m_disableLogging;
         private int m_fileAccess;
         private string m_fileExt;
@@ -77,10 +78,13 @@ namespace Nistec.Logging.IO.Unsafe
 
 
         [SecurityCritical]
-        public LogStream(string path, int bufferSize, LogWriteOption writeOption, long maxFileSize, int maxNumOfFiles)
+        public LogStream(string path, int bufferSize, LogWriteOption writeOption, long maxFileSize, int maxNumOfFiles, LoggerRolling rolling= LoggerRolling.Date, int currentFileNum = 1)
         {
             string fullPath = Path.GetFullPath(path);
             this.m_fileName = fullPath;
+            this.m_currentFileNum = currentFileNum;
+            this.m_Rolling = rolling;
+
             if (fullPath.StartsWith(@"\\.\", StringComparison.Ordinal))
             {
                 throw new NotSupportedException("Not Supported, IO Non File Devices");
@@ -112,8 +116,20 @@ namespace Nistec.Logging.IO.Unsafe
         [SecurityCritical]
         internal void m_Init(string path, int fAccess, FileShare share, Win32Io.SecurityAttributes secAttrs, FileIOPermissionAccess secAccess, FileMode mode, int flagsAndAttributes, bool seekToEnd)
         {
+            //for LoggerRolling.Size
+            if (m_Rolling== LoggerRolling.Size)// m_currentFileNum > 0 && m_writeOption == LogWriteOption.UnlimitedSequentialFiles)
+            {
+                if (this.m_fileNameWithoutExt == null)
+                {
+                    this.m_fileNameWithoutExt = Path.Combine(Path.GetDirectoryName(this.m_filePath), Path.GetFileNameWithoutExtension(this.m_filePath));
+                    this.m_fileExt = Path.GetExtension(this.m_filePath);
+                }
+                path =  (this.m_fileNameWithoutExt + this.m_currentFileNum.ToString(CultureInfo.InvariantCulture) + this.m_fileExt);
+            }
+
             string fullPath = Path.GetFullPath(path);
             this.m_fileName = fullPath;
+
             new FileIOPermission(secAccess, new string[] { fullPath }).Demand();
             int newMode = Win32Io.SetErrorMode(1);
             try
@@ -225,6 +241,7 @@ namespace Nistec.Logging.IO.Unsafe
                                 this.m_fileExt = Path.GetExtension(this.m_filePath);
                             }
                             string path = (this.m_currentFileNum == 1) ? this.m_filePath : (this.m_fileNameWithoutExt + this.m_currentFileNum.ToString(CultureInfo.InvariantCulture) + this.m_fileExt);
+
                             try
                             {
                                 this.m_Init(path, this.m_fileAccess, this.m_fileShare, this.m_secAttrib, this.m_filePermission, this.m_fileMode, this.m_flagsAndAttributesFile, this.m_seekToEndFile);
@@ -496,6 +513,15 @@ namespace Nistec.Logging.IO.Unsafe
             }
             this.m_writePos = 0;
         }
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        internal void FlushWrite()
+        {
+            if (this.m_writePos > 0)
+            {
+                this.WriteCore(this.m_buffer, 0, this.m_writePos, false);
+            }
+            this.m_writePos = 0;
+        }
 
         [SecuritySafeCritical]
         public void Write(string value, Encoding encoding)
@@ -535,7 +561,7 @@ namespace Nistec.Logging.IO.Unsafe
             {
                 byte[] b = Encoding.UTF8.GetBytes(value + "\r\n");
                 Write(b, 0, b.Length);
-             }
+            }
         }
 
         public override void Write(byte[] array, int offset, int count)

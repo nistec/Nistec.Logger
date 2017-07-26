@@ -24,7 +24,8 @@ namespace Nistec.Logging
         None = 1,
         File = 2,
         Console = 4,
-        Trace = 8
+        Trace = 8,
+        Api=16
     }
 
     [Flags]

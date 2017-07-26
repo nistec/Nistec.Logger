@@ -76,6 +76,7 @@
     <Reference Include="System.Design" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Net" />
+    <Reference Include="System.Net.Http, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL" />
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.ServiceModel" />
     <Reference Include="System.Transactions" />
@@ -97,6 +98,7 @@
     <Compile Include="Logging\LoggingExtensions.cs" />
     <Compile Include="Logging\Enums.cs" />
     <Compile Include="Logging\EventLogger.cs" />
+    <Compile Include="Logging\RestApi.cs" />
     <Compile Include="Logging\Netlog.cs" />
     <Compile Include="Logging\NetlogConfig.cs" />
     <Compile Include="Logging\NetlogSettings.cs" />

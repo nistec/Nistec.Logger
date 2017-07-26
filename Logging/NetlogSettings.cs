@@ -38,9 +38,16 @@ namespace Nistec.Logging
         public int BufferSize { get; set; }
         
         public bool IsAsync { get; set; }
+        public bool AutoFlush { get; set; }
+        public bool EnableApi { get; set; }
+        public string ApiUrl { get; set; }
+        public string ApiMethod { get; set; }
+
 
         public NetlogSettings(bool autoLoad)
         {
+            AutoFlush = true;
+
             if (autoLoad)
             {
                 LoadSettings();
@@ -60,6 +67,10 @@ namespace Nistec.Logging
             MaxFileSize = long.MaxValue;
             BufferSize = 1000;
             IsAsync = false;
+            ApiUrl = null;
+            ApiMethod = null;
+            EnableApi = false;
+            AutoFlush = true;
             SetLogApp();
         }
 
@@ -72,6 +83,10 @@ namespace Nistec.Logging
             MaxFileSize = maxFileSize;
             BufferSize = bufferSize;
             IsAsync = false;
+            ApiUrl = null;
+            ApiMethod = null;
+            EnableApi = false;
+            AutoFlush = true;
             SetLogApp();
         }
 
@@ -92,19 +107,27 @@ namespace Nistec.Logging
             string lvlFlags = table.Get("LogLevel");
             string logRolling = table.Get("LogRolling");
             long maxFileSize = table.Get<long>("MaxFileSize",0);
-            int bufferSize = table.Get<int>("BufferSize", 1000);
+            int bufferSize = table.Get<int>("BufferSize", 1024);
+            bool autoFlush = table.Get<bool>("AutoFlush", true); ;
+            string apiUrl = table.Get("ApiUrl");
+            string apiMethod = table.Get("ApiMethod");
 
-            LoadSettings(logFilename, logmode, lvlFlags, logRolling, maxFileSize, bufferSize);
+            LoadSettings(logFilename, logmode, lvlFlags, logRolling, maxFileSize, bufferSize,autoFlush, apiUrl,apiMethod);
         }
 
-        public void LoadSettings(string logFilename, string logmode, string lvlFlags, string logRolling, long maxFileSize, int bufferSize)
+        public void LoadSettings(string logFilename, string logmode, string lvlFlags, string logRolling, long maxFileSize, int bufferSize, bool autoFlush,string apiUrl, string apiMethod)
         {
-         
+
+            ApiUrl = apiUrl;
+            ApiMethod = apiMethod;
+            EnableApi = (!string.IsNullOrEmpty(apiUrl) && apiUrl.ToLower().StartsWith("http"));
+
             IsAsync = false;
             LogApp = Path.GetFileNameWithoutExtension(logFilename);
             LogFilename = logFilename;
             MaxFileSize = maxFileSize;
             BufferSize = bufferSize;
+            AutoFlush = autoFlush;
             SetLogApp();
             LoggerMode modFlags = LoggerMode.None;
             if (!string.IsNullOrEmpty(logmode))

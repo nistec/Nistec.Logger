@@ -28,15 +28,16 @@ using System.IO;
 using System.Configuration;
 using System.Collections.Specialized;
 using System.Collections;
+using System.Linq;
 using Nistec.Logging.Generic;
 using Nistec.Logging.IO;
 using Nistec.Logging.IO.Unsafe;
+using System.Threading.Tasks;
+using System.Web;
 
 
 namespace Nistec.Logging
 {
-   
-
     
     /// <summary>
     /// The class helps looging exceptions and traces.
@@ -59,25 +60,47 @@ namespace Nistec.Logging
         internal string LogFilename;
         internal string LogApp;
         internal bool IsAsync;
-        internal int BufferSize = 1000;
+        internal bool AutoFlush;
+        internal int BufferSize = 1024;
+
+        internal string apiUrl;
+        internal string apiMethod;
+        internal bool enableApi;
 
         LogStream m_ls;
        string curFilename;
 
+       internal static int GetLastModifiedFileNum(string path, string filepath)
+       {
+           var directory= new DirectoryInfo(path);
+           var filename=  Path.GetFileNameWithoutExtension(filepath);
+           var logfile = directory.GetFiles(filename + "*").OrderByDescending(f => f.LastWriteTime).FirstOrDefault();
 
+           if (logfile == null)
+               return 1;
+
+           return Types.ToInt(logfile.Name.Replace(logfile.Extension, "").Replace(filename, ""));
+
+       }
         private void Create(string filename)
         {
-
+            string path=Path.GetDirectoryName(filename);
             // If there isn't such directory, create it.
-            if (!Directory.Exists(Path.GetDirectoryName(filename)))
+            if (!Directory.Exists(path))
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(filename));
+                Directory.CreateDirectory(path);
             }
 
             //default is LogWriteOption.SingleFileUnboundedSize
             LogWriteOption writeOption = LogRolling == LoggerRolling.Size ? LogWriteOption.UnlimitedSequentialFiles : LogWriteOption.SingleFileUnboundedSize;
+
             int maxFiles = LogRolling == LoggerRolling.Size ? int.MaxValue : 1;
-            m_ls = new LogStream(filename, BufferSize, writeOption, MaxSize, maxFiles);
+            int curFileNum = 1;
+            if (LogRolling == LoggerRolling.Size)
+            {
+                curFileNum = GetLastModifiedFileNum(path, filename);
+            }
+            m_ls = new LogStream(filename, BufferSize, writeOption, MaxSize, maxFiles, LogRolling,curFileNum);
             
             curFilename = filename;
 
@@ -148,8 +171,12 @@ namespace Nistec.Logging
                 LogRolling = settings.LogRolling;
                 MaxSize = settings.MaxFileSize;
                 BufferSize = settings.BufferSize;
+                AutoFlush = settings.AutoFlush;
                 IsAsync = settings.IsAsync;
                 LogApp = settings.LogApp;
+                apiUrl = settings.ApiUrl;
+                apiMethod = settings.ApiMethod;
+                enableApi = settings.EnableApi;
             }
             else
             {
@@ -159,8 +186,12 @@ namespace Nistec.Logging
                 LogFilename = null;
                 MaxSize = long.MaxValue;
                 BufferSize = 1000;
+                AutoFlush = true;
                 IsAsync = false;
                 LogApp = null;
+                apiUrl = null;
+                apiMethod = null;
+                enableApi = false;
             }
 
             if (MaxSize <= 0)
@@ -300,25 +331,38 @@ namespace Nistec.Logging
             string threadid = Thread.CurrentThread.GetHashCode().ToString();
             string threadName = Thread.CurrentThread.Name;
 
-            if (threadName == null)
-                message = msgtime.ToString("s") + "-<" + _processid + "." + threadid + "> " + Enum.Format(typeof(LoggerLevel), msglvl, "G") + " - " + msg;
-            else
-                message = msgtime.ToString("s") + "-<" + _processid + "." + threadid + ". " + threadName + "> " + Enum.Format(typeof(LoggerLevel), msglvl, "G") + " - " + msg;
+            string threadDisplay = (threadName == null) ? _processid + "." + threadid : _processid + "." + threadid + ". " + threadName;
+
+            message = msgtime.ToString("s") + " (" + threadDisplay + ") -" + Enum.Format(typeof(LoggerLevel), msglvl, "G") + "- " + msg;
+
+            //if (threadName == null)
+            //    message = msgtime.ToString("s") + "-<" + _processid + "." + threadid + "> " + Enum.Format(typeof(LoggerLevel), msglvl, "G") + " - " + msg;
+            //else
+            //    message = msgtime.ToString("s") + "-<" + _processid + "." + threadid + ". " + threadName + "> " + Enum.Format(typeof(LoggerLevel), msglvl, "G") + " - " + msg;
 
             if (LogMode.HasFlag(LoggerMode.File))
             {
                 string filename = GetFilename();
                 if (IsAsync)
-                    WriteLogAsync(filename, message);
+                    WriteAsync(filename, message);
                 else
-                    Write(filename, message); //WriteLog(filename, message);
+                    Write(filename, message);
             }
 
             if (consoleAswell || LogMode.HasFlag(LoggerMode.Console))
                 Console.WriteLine(message);
             if (LogMode.HasFlag(LoggerMode.Trace))
                 System.Diagnostics.Trace.WriteLine(message);
+            if (enableApi && LogMode.HasFlag(LoggerMode.Api))
+                WriteApi(msgtime, msglvl, msg, threadDisplay);
 
+        }
+
+        void WriteApi(DateTime msgtime, LoggerLevel msglvl, string message, string threadDisplay)
+        {
+            string json = @"{'Date':'" + msgtime.ToString("s") + "','Level':'" + Enum.Format(typeof(LoggerLevel), msglvl, "G") + "','App':'" + LogApp + "','Thread':'" + threadDisplay + "','Message':'" + HttpUtility.UrlEncode(message) + "'}";
+
+            Task.Factory.StartNew(() => RestApiConnector.SendJson(apiUrl, apiMethod, json));
         }
 
         /// <summary>
@@ -344,43 +388,49 @@ namespace Nistec.Logging
                 {
                     Open(fileName);
                     m_ls.WriteLine(text);
- 
+                    if (AutoFlush == false)
+                        m_ls.FlushWrite();
                 }
             }
             catch
             {
             }
         }
-
 
         /// <summary>
         /// Writes specified text to log file.
         /// </summary>
         /// <param name="fileName">Log file name.</param>
         /// <param name="text">Log text.</param>
-        static void WriteLog(string fileName, string text)
+        void WriteAsync(string fileName, string text)
         {
+
             try
             {
 
-                lock (syncLock)
-                {
-                    // If there isn't such directory, create it.
-                    if (!Directory.Exists(Path.GetDirectoryName(fileName)))
-                    {
-                        Directory.CreateDirectory(Path.GetDirectoryName(fileName));
-                    }
-                }
+                IAsyncResult ar = null;
+                byte[] data = Encoding.UTF8.GetBytes(text + "\r\n");
 
                 lock (syncLock)
                 {
-                    using (FileStream fs = new FileStream(fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite))
+                    Open(fileName);
+                    // initiate an asynchronous write
+                    ar = m_ls.BeginWrite(data, 0, data.Length, null, null);
+
+                    if (!ar.CompletedSynchronously)
                     {
-                        StreamWriter w = new StreamWriter(fs);     // create a Char writer 
-                        w.BaseStream.Seek(0, SeekOrigin.End);      // set the file pointer to the end
-                        w.Write(text + "\r\n");
-                        w.Flush();  // update underlying file
+                        // write is proceeding in the background.
+                        // wait for the operation to complete
+                        while (!ar.IsCompleted)
+                        {
+                            //Console.Write('.');
+                            Thread.Sleep(10);
+                        }
                     }
+                    // harvest the result
+                    m_ls.EndWrite(ar);
+                    if (AutoFlush == false)
+                        m_ls.FlushWrite();
                 }
             }
             catch
@@ -389,59 +439,95 @@ namespace Nistec.Logging
         }
 
 
-        static void WriteLogAsync(string fileName, string text)
-        {
-            lock (syncLock)
-            {
-                // If there isn't such directory, create it.
-                if (!Directory.Exists(Path.GetDirectoryName(fileName)))
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(fileName));
-                }
-            }
-            byte[] data = Encoding.UTF8.GetBytes(text + "\r\n");
-            FileStream fs = null;
-            try
-            {
+        ///// <summary>
+        ///// Writes specified text to log file.
+        ///// </summary>
+        ///// <param name="fileName">Log file name.</param>
+        ///// <param name="text">Log text.</param>
+        //static void WriteLog(string fileName, string text)
+        //{
+        //    try
+        //    {
 
-                fs = new FileStream(fileName, FileMode.Create, FileAccess.Write, FileShare.ReadWrite, 1, true);
-                IAsyncResult ar = null;
-                lock (syncLock)
-                {
-                    // initiate an asynchronous write
-                    ar = fs.BeginWrite(data, 0, data.Length, null, null);
-                }
-                if (ar.CompletedSynchronously)
-                {
-                    Console.WriteLine("Operation completed synchronously.");
-                }
-                else
-                {
-                    // write is proceeding in the background.
-                    // wait for the operation to complete
-                    while (!ar.IsCompleted)
-                    {
-                        Console.Write('.');
-                        Thread.Sleep(10);
-                    }
-                    Console.WriteLine();
-                }
-                lock (syncLock)
-                {
-                    // harvest the result
-                    fs.EndWrite(ar);
-                    fs.Flush();
-                }
-                Console.WriteLine("data written");
-            }
-            finally
-            {
-                lock (syncLock)
-                {
-                    fs.Close();
-                }
-            }
-        }
+        //        lock (syncLock)
+        //        {
+        //            // If there isn't such directory, create it.
+        //            if (!Directory.Exists(Path.GetDirectoryName(fileName)))
+        //            {
+        //                Directory.CreateDirectory(Path.GetDirectoryName(fileName));
+        //            }
+        //        }
+
+        //        lock (syncLock)
+        //        {
+        //            using (FileStream fs = new FileStream(fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite))
+        //            {
+        //                StreamWriter w = new StreamWriter(fs);     // create a Char writer 
+        //                w.BaseStream.Seek(0, SeekOrigin.End);      // set the file pointer to the end
+        //                w.Write(text + "\r\n");
+        //                w.Flush();  // update underlying file
+        //            }
+        //        }
+        //    }
+        //    catch
+        //    {
+        //    }
+        //}
+
+
+        //void WriteLogAsync(string fileName, string text)
+        //{
+        //    lock (syncLock)
+        //    {
+        //        // If there isn't such directory, create it.
+        //        if (!Directory.Exists(Path.GetDirectoryName(fileName)))
+        //        {
+        //            Directory.CreateDirectory(Path.GetDirectoryName(fileName));
+        //        }
+        //    }
+        //    byte[] data = Encoding.UTF8.GetBytes(text + "\r\n");
+        //    FileStream fs = null;
+        //    try
+        //    {
+
+        //        //fs = new FileStream(fileName, FileMode.Create, FileAccess.Write, FileShare.ReadWrite, 1, true);
+        //        IAsyncResult ar = null;
+        //        lock (syncLock)
+        //        {
+        //            // initiate an asynchronous write
+        //            ar = fs.BeginWrite(data, 0, data.Length, null, null);
+        //        }
+        //        if (ar.CompletedSynchronously)
+        //        {
+        //            Console.WriteLine("Operation completed synchronously.");
+        //        }
+        //        else
+        //        {
+        //            // write is proceeding in the background.
+        //            // wait for the operation to complete
+        //            while (!ar.IsCompleted)
+        //            {
+        //                Console.Write('.');
+        //                Thread.Sleep(10);
+        //            }
+        //            Console.WriteLine();
+        //        }
+        //        lock (syncLock)
+        //        {
+        //            // harvest the result
+        //            m_ls.EndWrite(ar);
+        //            fs.Flush();
+        //        }
+        //        Console.WriteLine("data written");
+        //    }
+        //    finally
+        //    {
+        //        lock (syncLock)
+        //        {
+        //            fs.Close();
+        //        }
+        //    }
+        //}
 
         string GetFilename()
         {
@@ -450,7 +536,10 @@ namespace Nistec.Logging
                 //string fileName = LogFilename;
                 return LogFilename.Replace(".log", DateTime.Today.ToString("yyyyMMdd") + ".log");
             }
+           
             return LogFilename;
         }
+
+
     }
 }
