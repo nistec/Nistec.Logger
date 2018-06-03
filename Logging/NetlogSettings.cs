@@ -29,6 +29,9 @@ namespace Nistec.Logging
 {
     public class NetlogSettings
     {
+
+        public static readonly NetlogSettings Settings = new NetlogSettings(true);
+
         public string LogApp { get; set; }
         public string LogFilename { get; set; }
         public LoggerMode LogMode { get; set; }//0=none,1=console,2=file,3=both
@@ -43,6 +46,9 @@ namespace Nistec.Logging
         public string ApiUrl { get; set; }
         public string ApiMethod { get; set; }
 
+        public string CleanerDirectories { get; set; }
+        public string CleanerFileEx { get; set; }
+        public int CleanerDays { get; set; }
 
         public NetlogSettings(bool autoLoad)
         {
@@ -71,6 +77,9 @@ namespace Nistec.Logging
             ApiMethod = null;
             EnableApi = false;
             AutoFlush = true;
+            CleanerDirectories = null;
+            CleanerFileEx = null;
+            CleanerDays = 30;
             SetLogApp();
         }
 
@@ -87,6 +96,9 @@ namespace Nistec.Logging
             ApiMethod = null;
             EnableApi = false;
             AutoFlush = true;
+            CleanerDirectories = null;
+            CleanerFileEx = null;
+            CleanerDays = 30;
             SetLogApp();
         }
 
@@ -98,7 +110,7 @@ namespace Nistec.Logging
                 LoadSettings(config.NetlogItems);
             }
         }
-        
+
         public void LoadSettings(NetConfigItems table)
         {
             IsAsync = false;
@@ -106,21 +118,30 @@ namespace Nistec.Logging
             string logmode = table.Get("LogMode");
             string lvlFlags = table.Get("LogLevel");
             string logRolling = table.Get("LogRolling");
-            long maxFileSize = table.Get<long>("MaxFileSize",0);
+            long maxFileSize = table.Get<long>("MaxFileSize", 0);
             int bufferSize = table.Get<int>("BufferSize", 1024);
-            bool autoFlush = table.Get<bool>("AutoFlush", true); ;
+            bool autoFlush = table.Get<bool>("AutoFlush", true);
             string apiUrl = table.Get("ApiUrl");
             string apiMethod = table.Get("ApiMethod");
 
-            LoadSettings(logFilename, logmode, lvlFlags, logRolling, maxFileSize, bufferSize,autoFlush, apiUrl,apiMethod);
+            string cleaner_Directories = table.Get("cleaner_Directories");
+            string cleaner_FileEx = table.Get("cleaner_FileEx");
+            int cleaner_Days = table.Get<int>("cleaner_Days", 30);
+
+            LoadSettings(logFilename, logmode, lvlFlags, logRolling, maxFileSize, bufferSize, autoFlush, apiUrl, apiMethod, cleaner_Directories, cleaner_FileEx, cleaner_Days);
         }
 
-        public void LoadSettings(string logFilename, string logmode, string lvlFlags, string logRolling, long maxFileSize, int bufferSize, bool autoFlush,string apiUrl, string apiMethod)
+        public void LoadSettings(string logFilename, string logmode, string lvlFlags, string logRolling, long maxFileSize, int bufferSize, bool autoFlush,string apiUrl, string apiMethod, string cleaner_Directories,string cleaner_FileEx,int cleaner_Days)
         {
 
             ApiUrl = apiUrl;
             ApiMethod = apiMethod;
             EnableApi = (!string.IsNullOrEmpty(apiUrl) && apiUrl.ToLower().StartsWith("http"));
+
+            CleanerDirectories = cleaner_Directories;
+            CleanerFileEx = cleaner_FileEx;
+            CleanerDays = cleaner_Days;
+
 
             IsAsync = false;
             LogApp = Path.GetFileNameWithoutExtension(logFilename);

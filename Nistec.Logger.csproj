@@ -48,7 +48,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>..\References\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -87,6 +87,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Cleaner\CleanerJob.cs" />
+    <Compile Include="Cleaner\Common.cs" />
+    <Compile Include="Cleaner\LogCleaner.cs" />
+    <Compile Include="Cleaner\Zipper.cs" />
     <Compile Include="Common\Types.cs" />
     <Compile Include="Generic\ConverterUtil.cs" />
     <Compile Include="Generic\XmlTable.cs">
@@ -114,7 +118,9 @@
     <Compile Include="Generic\GenericTypes.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Content Include="Config.txt" />
+  </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
       <Visible>False</Visible>

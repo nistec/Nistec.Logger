@@ -1,0 +1,24 @@
+﻿ <configSections>
+     <section name="Netlog" type="Nistec.Logging.NetlogConfig, Nistec.Logger, Version=4.0.2.0, Culture=neutral, PublicKeyToken=734a739868a76423" requirePermission="false"/>
+  </configSections>
+
+  <Netlog>
+    <NetlogSettings>
+      <add key="LogFilename" value="C:\Dev\Logs\file.log"/>
+      <add key="LogLevel" value="Debug|Info|Warn|Error|Trace"/>
+      <add key="LogMode" value="File|Console"/>
+
+	  <add key="LogRolling" value="None|Date|Size"/>
+      <add key="MaxFileSize" value="2147483647"/>
+      <add key="BufferSize" value="1024"/>
+      <add key="AutoFlush" value="true"/>
+      <add key="ApiUrl" value="http://api/logger/"/>
+      <add key="ApiMethod" value="logWriter"/>
+
+      <add key="cleaner_Directories" value="c:\\Logs;c:\\services\Logs"/>
+      <add key="cleaner_FileEx" value="*.log*;*.zip*"/>
+      <add key="cleaner_Days" value="30"/>
+
+    </NetlogSettings>
+  </Netlog>
+
