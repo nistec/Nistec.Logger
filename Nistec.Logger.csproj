@@ -99,10 +99,12 @@
     <Compile Include="IO\Win32Io.cs" />
     <Compile Include="IO\Unsafe\LogStream.cs" />
     <Compile Include="IO\StreamLineReader.cs" />
+    <Compile Include="Logging\LogMessageEventArgs.cs" />
+    <Compile Include="Logging\LogService.cs" />
     <Compile Include="Logging\LoggingExtensions.cs" />
     <Compile Include="Logging\Enums.cs" />
     <Compile Include="Logging\EventLogger.cs" />
-    <Compile Include="Logging\RestApi.cs" />
+    <Compile Include="Logging\RestApiConnector.cs" />
     <Compile Include="Logging\Netlog.cs" />
     <Compile Include="Logging\NetlogConfig.cs" />
     <Compile Include="Logging\NetlogSettings.cs" />

@@ -39,8 +39,9 @@ namespace Nistec.Logging
         public LoggerRolling LogRolling { get; set; }
         public long MaxFileSize { get; set; }
         public int BufferSize { get; set; }
-        
-        public bool IsAsync { get; set; }
+
+        public AsyncType AsyncType { get; set; }
+
         public bool AutoFlush { get; set; }
         public bool EnableApi { get; set; }
         public string ApiUrl { get; set; }
@@ -64,6 +65,7 @@ namespace Nistec.Logging
         {
             LogApp = Path.GetFileNameWithoutExtension(LogFilename);
         }
+
         public void LoadSettings(string logFilename)
         {
             LogFilename = logFilename;
@@ -72,7 +74,9 @@ namespace Nistec.Logging
             LogRolling = LoggerRolling.Date;
             MaxFileSize = long.MaxValue;
             BufferSize = 1000;
-            IsAsync = false;
+            //IsAsync = false;
+            AsyncType =  AsyncType.None;
+
             ApiUrl = null;
             ApiMethod = null;
             EnableApi = false;
@@ -91,7 +95,9 @@ namespace Nistec.Logging
             LogRolling = logRolling;
             MaxFileSize = maxFileSize;
             BufferSize = bufferSize;
-            IsAsync = false;
+            //IsAsync = false;
+            AsyncType = AsyncType.None;
+
             ApiUrl = null;
             ApiMethod = null;
             EnableApi = false;
@@ -113,10 +119,13 @@ namespace Nistec.Logging
 
         public void LoadSettings(NetConfigItems table)
         {
-            IsAsync = false;
+            //IsAsync = false;
             string logFilename = table.Get("LogFilename");
             string logmode = table.Get("LogMode");
             string lvlFlags = table.Get("LogLevel");
+            //bool isAsync = table.Get<bool>("IsAsync", true);
+            string asyncType = table.Get("AsyncType");
+
             string logRolling = table.Get("LogRolling");
             long maxFileSize = table.Get<long>("MaxFileSize", 0);
             int bufferSize = table.Get<int>("BufferSize", 1024);
@@ -128,10 +137,26 @@ namespace Nistec.Logging
             string cleaner_FileEx = table.Get("cleaner_FileEx");
             int cleaner_Days = table.Get<int>("cleaner_Days", 30);
 
-            LoadSettings(logFilename, logmode, lvlFlags, logRolling, maxFileSize, bufferSize, autoFlush, apiUrl, apiMethod, cleaner_Directories, cleaner_FileEx, cleaner_Days);
+            LoadSettings(logFilename, logmode, lvlFlags, asyncType, logRolling, maxFileSize, bufferSize, autoFlush, apiUrl, apiMethod, cleaner_Directories, cleaner_FileEx, cleaner_Days);
         }
 
-        public void LoadSettings(string logFilename, string logmode, string lvlFlags, string logRolling, long maxFileSize, int bufferSize, bool autoFlush,string apiUrl, string apiMethod, string cleaner_Directories,string cleaner_FileEx,int cleaner_Days)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="logFilename"></param>
+        /// <param name="logmode"></param>
+        /// <param name="lvlFlags"></param>
+        /// <param name="asyncType"></param>
+        /// <param name="logRolling"></param>
+        /// <param name="maxFileSize"></param>
+        /// <param name="bufferSize"></param>
+        /// <param name="autoFlush"></param>
+        /// <param name="apiUrl"></param>
+        /// <param name="apiMethod"></param>
+        /// <param name="cleaner_Directories"></param>
+        /// <param name="cleaner_FileEx"></param>
+        /// <param name="cleaner_Days"></param>
+        public void LoadSettings(string logFilename, string logmode, string lvlFlags, string asyncType, string logRolling, long maxFileSize, int bufferSize, bool autoFlush,string apiUrl, string apiMethod, string cleaner_Directories,string cleaner_FileEx,int cleaner_Days)
         {
 
             ApiUrl = apiUrl;
@@ -142,8 +167,20 @@ namespace Nistec.Logging
             CleanerFileEx = cleaner_FileEx;
             CleanerDays = cleaner_Days;
 
+            AsyncType asyncFlags = AsyncType.None;
+            if (!string.IsNullOrEmpty(asyncType))
+            {
 
-            IsAsync = false;
+                AsyncType[] mflags = EnumExtension.GetEnumFlags<AsyncType>(asyncType, AsyncType.None);
+                foreach (AsyncType flg in mflags)
+                {
+                    asyncFlags = asyncFlags | flg;
+                }
+            }
+            AsyncType = asyncFlags;
+
+            //IsAsync = isAsync;
+
             LogApp = Path.GetFileNameWithoutExtension(logFilename);
             LogFilename = logFilename;
             MaxFileSize = maxFileSize;

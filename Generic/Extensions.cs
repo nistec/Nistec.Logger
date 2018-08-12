@@ -29,6 +29,7 @@ using System.Runtime.InteropServices;
 //using Nistec.Runtime;
 using System.Collections.Specialized;
 using System.Globalization;
+using System.Collections.Concurrent;
 
 namespace Nistec.Logging.Generic
 {
@@ -339,6 +340,18 @@ namespace Nistec.Logging.Generic
 
         #endregion
 
+    }
+
+    internal static class ConcurrentExtensions
+    {
+        public static void Clear<T>(this ConcurrentQueue<T> queue)
+        {
+            T item;
+            while (queue.TryDequeue(out item))
+            {
+                // do nothing
+            }
+        }
     }
 
 }

@@ -29,7 +29,7 @@ namespace Nistec.Logging
     public interface ILogger
     {
         bool IsEnabled(LoggerLevel level);
-        void Log(LoggerLevel level, string format, params object[] args);
+        void Log(LoggerLevel level, string message, params object[] args);
         void Exception(string message, Exception exception, bool innerException, bool addStackTrace);
         void Trace(string method, bool begin);
     }

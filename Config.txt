@@ -7,6 +7,8 @@
       <add key="LogFilename" value="C:\Dev\Logs\file.log"/>
       <add key="LogLevel" value="Debug|Info|Warn|Error|Trace"/>
       <add key="LogMode" value="File|Console"/>
+	  <!--<add key="IsAsync" value="true"/>-->
+	  <add key="AsyncType" value="None|File|Invoke|Service"/>
 
 	  <add key="LogRolling" value="None|Date|Size"/>
       <add key="MaxFileSize" value="2147483647"/>

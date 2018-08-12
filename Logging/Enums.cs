@@ -35,4 +35,13 @@ namespace Nistec.Logging
         Date = 1,
         Size = 2
     }
+
+    [Flags]
+    public enum AsyncType
+    {
+        None = 0,
+        File = 1,
+        Invoke = 2,
+        Service = 4
+    }
 }

@@ -21,6 +21,12 @@ namespace Nistec.Logging
     {
         const int TimeoutSeconds = 20;
 
+        public string ApiUrl { get; set; }
+        public string ApiMethod { get; set; }
+
+
+
+
         static void Validate(string url, string method,string request)
         {
             if (url == null || url.Length == 0)

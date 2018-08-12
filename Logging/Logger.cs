@@ -50,16 +50,23 @@ namespace Nistec.Logging
     /// </example>
     public class Logger:ILogger, IDisposable
     {
-       
+
+        #region members
         private string _processid;
         private string _processname;
         internal LoggerLevel LogLevel;
         internal LoggerMode LogMode;
         internal LoggerRolling LogRolling;
+        internal AsyncType AsyncType;
         internal long MaxSize;
         internal string LogFilename;
         internal string LogApp;
-        internal bool IsAsync;
+        //internal bool IsAsync;
+
+        internal bool AsyncService;
+        internal bool AsyncInvoke;
+        internal bool AsyncFile;
+
         internal bool AutoFlush;
         internal int BufferSize = 1024;
 
@@ -68,9 +75,12 @@ namespace Nistec.Logging
         internal bool enableApi;
 
         LogStream m_ls;
-       string curFilename;
+        string curFilename;
+        #endregion
 
-       internal static int GetLastModifiedFileNum(string path, string filepath)
+        #region file methods
+
+        internal static int GetLastModifiedFileNum(string path, string filepath)
        {
            var directory= new DirectoryInfo(path);
            var filename=  Path.GetFileNameWithoutExtension(filepath);
@@ -127,6 +137,7 @@ namespace Nistec.Logging
             }
 
         }
+        #endregion
 
         private static readonly object syncLock = new object();
 
@@ -142,17 +153,92 @@ namespace Nistec.Logging
             return (LogLevel.HasFlag(level));
         }
 
-        public void Log(LoggerLevel level, string format, params object[] args)
+        public void Log(LoggerLevel level, string message, params object[] args)
         {
-            if (IsEnabled(level))
+            try
             {
-                if(args==null)
-                WriteLine(level, format);
-                else
-                WriteLine(level, string.Format(format, args));
+                if (IsEnabled(level))
+                {
+
+                    if (AsyncService)
+                    {
+                        if (args == null)
+                            LogService.WriteLine(DateTime.Now, level, message);
+                        else
+                            LogService.WriteLine(DateTime.Now, level, string.Format(message, args));
+                    }
+                    else if (AsyncInvoke)
+                    {
+                        LogAsync(level, message, args);
+                    }
+                    else
+                    {
+                        if (args == null)
+                            WriteLine(DateTime.Now, level, message);
+                        else
+                            WriteLine(DateTime.Now, level, string.Format(message, args));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+
+                Console.WriteLine("Logger error WriteLog: {0}", ex.Message);
             }
         }
 
+        internal void WriteInternal(LoggerLevel level, string message, params object[] args)
+        {
+            try
+            {
+                if (IsEnabled(level))
+                {
+                    if (AsyncInvoke)
+                    {
+                        LogAsync(level, message, args);
+                    }
+                    else
+                    {
+                        if (args == null)
+                            WriteLine(DateTime.Now, level, message);
+                        else
+                            WriteLine(DateTime.Now, level, string.Format(message, args));
+
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+
+                Console.WriteLine("Logger error WriteLog: {0}", ex.Message);
+            }
+        }
+
+        #region log service
+
+        LogService logServive;
+
+        public LogService LogService
+        {
+            get
+            {
+                if (logServive == null)
+                {
+                    logServive = new LogService(this, true);
+                }
+                return logServive;
+            }
+        }
+
+        //void LogServiceStart()
+        //{
+        //    logServive = new LogService(true);
+        //}
+
+
+        #endregion
+
+        #region ctor
         public Logger(bool autoLoad)
             : this(autoLoad ? new NetlogSettings(true) : null)
         {
@@ -162,6 +248,7 @@ namespace Nistec.Logging
         {
             _processid = Process.GetCurrentProcess().Id.ToString();
             _processname = Process.GetCurrentProcess().MainModule.ModuleName;
+
             if (settings != null)
             {
                 //Settings.LoadSettings();
@@ -172,7 +259,9 @@ namespace Nistec.Logging
                 MaxSize = settings.MaxFileSize;
                 BufferSize = settings.BufferSize;
                 AutoFlush = settings.AutoFlush;
-                IsAsync = settings.IsAsync;
+                //IsAsync = settings.IsAsync;
+                AsyncType = settings.AsyncType;
+
                 LogApp = settings.LogApp;
                 apiUrl = settings.ApiUrl;
                 apiMethod = settings.ApiMethod;
@@ -187,12 +276,19 @@ namespace Nistec.Logging
                 MaxSize = long.MaxValue;
                 BufferSize = 1000;
                 AutoFlush = true;
-                IsAsync = false;
+                //IsAsync = false;
+                AsyncType = AsyncType.None;
+
                 LogApp = null;
                 apiUrl = null;
                 apiMethod = null;
                 enableApi = false;
             }
+
+            AsyncService = (AsyncType.HasFlag(AsyncType.Service));
+            AsyncInvoke = (AsyncType.HasFlag(AsyncType.Invoke));
+            AsyncFile = (AsyncType.HasFlag(AsyncType.File));
+
 
             if (MaxSize <= 0)
                 MaxSize = long.MaxValue;
@@ -201,6 +297,8 @@ namespace Nistec.Logging
         {
             Dispose(false);
         }
+
+        #endregion
 
         #region Dispose
 
@@ -240,6 +338,7 @@ namespace Nistec.Logging
         }
         #endregion
 
+        #region replection
 
         internal static string GetMethodBase()
         {
@@ -251,8 +350,10 @@ namespace Nistec.Logging
             System.Reflection.MethodBase methodBase = (System.Reflection.MethodBase)(new System.Diagnostics.StackTrace().GetFrame(2).GetMethod());
             return methodBase.DeclaringType.Namespace + "." + methodBase.DeclaringType.Name + "." + methodBase.Name;
         }
+        #endregion
 
-            
+        #region Trace
+
         Dictionary<string, DateTime> _Tracetable;
 
         Dictionary<string, DateTime> Tracetable
@@ -269,65 +370,230 @@ namespace Nistec.Logging
 
         public void Trace(string method, bool begin)
         {
-            if (LogLevel.HasFlag(LoggerLevel.Trace))
+            try
             {
-                string message = null;
-                string key = string.Format("{0}:{1}", method, Thread.CurrentThread.Name);
-                DateTime msgtime = DateTime.Now;
-                if (begin)
+                if (LogLevel.HasFlag(LoggerLevel.Trace))
                 {
-                    Tracetable[key] = DateTime.Now;
-                    message = method + " " + "BEGIN";
-                }
-                else
-                {
-                    if (Tracetable.TryGetValue(key, out msgtime))
+                    string message = null;
+                    string key = string.Format("{0}:{1}", method, Thread.CurrentThread.Name);
+                    DateTime msgtime = DateTime.Now;
+                    if (begin)
                     {
-
-                        TimeSpan sp = msgtime.Subtract(DateTime.Now);
-                        message = method + " END DURATION:" + sp.TotalMilliseconds;
-                        Tracetable.Remove(key);
+                        Tracetable[key] = DateTime.Now;
+                        message = method + " " + "BEGIN";
                     }
                     else
                     {
-                        message = method + " " + "END";
-                    }
-                }
-                WriteLine(LoggerLevel.Trace, message);
-            }
-        }
+                        if (Tracetable.TryGetValue(key, out msgtime))
+                        {
 
-       
-        public void Exception(string message, Exception e, bool innerException, bool addStackTrace)
-        {
-            if (LogLevel.HasFlag(LoggerLevel.Error))
+                            TimeSpan sp = msgtime.Subtract(DateTime.Now);
+                            message = method + " END DURATION:" + sp.TotalMilliseconds;
+                            Tracetable.Remove(key);
+                        }
+                        else
+                        {
+                            message = method + " " + "END";
+                        }
+                    }
+                    WriteLine(msgtime, LoggerLevel.Trace, message);
+
+                }
+            }
+            catch (Exception ex)
             {
 
-                StringBuilder sb = new StringBuilder();
-                sb.AppendLine(message + " " + e.Message);
-
-                if (innerException)
-                {
-                    Exception innerEx = e == null ? null : e.InnerException;
-                    while (innerEx != null)
-                    {
-                        sb.Append(innerEx.Message);
-                        innerEx = innerEx.InnerException;
-                    }
-                }
-                if (addStackTrace)
-                {
-                    sb.AppendLine();
-                    sb.AppendFormat("StackTrace:{0}", e.StackTrace);
-                }
-                WriteLine(LoggerLevel.Error, sb.ToString());
+                Console.WriteLine("Logger error Trace: {0}", ex.Message);
             }
         }
+        #endregion
 
-        void WriteLine(LoggerLevel msglvl, string msg, bool consoleAswell = false)
+        #region write aysnc
+
+        private AsyncCallback onRequestCompleted;
+        //private ManualResetEvent resetEvent;
+
+        /// <summary>
+        /// Log Item Callback delegate
+        /// </summary>
+        /// <param name="level"></param>
+        /// <param name="text"></param>
+        /// <returns></returns>
+        public delegate string LogItemCallback(LoggerLevel level, string text);
+        /// <summary>
+        /// Log Completed event
+        /// </summary>
+        public event LogMessageEventHandler LogMessage;
+        /// <summary>
+        /// OnLogCompleted
+        /// </summary>
+        /// <param name="e"></param>
+        protected virtual void OnLogMessage(LogMessageEventArgs e)
+        {
+            if (LogMessage != null)
+                LogMessage(this, e);
+        }
+
+        private string LogItemWorker(LoggerLevel level, string text)
+        {
+            //string msg = string.Format("{0}: {1}", DateTime.Now, text);
+
+            try
+            {
+                DateTime msgTime = DateTime.Now;
+                string msg = string.Format("{0}: {1}", msgTime, level.ToString() + "-" + text);
+
+                if (IsEnabled(level))
+                {
+                    WriteLine(msgTime, level, text);
+                }
+                return msg;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Logger error LogItemWorker: {0}", ex.Message);
+                return ex.Message;
+            }
+            //Log(level, text);
+        }
+
+        /// <summary>
+        /// AsyncLog
+        /// </summary>
+        /// <returns></returns>
+        public void LogAsync(LoggerLevel level, string message, params object[] args)
+        {
+            string msg = message;
+
+            if (args != null)
+                msg= string.Format(message, args);
+
+            LogItemCallback caller = new LogItemCallback(LogItemWorker);
+
+            // Initiate the asychronous call.
+            IAsyncResult result = caller.BeginInvoke(level, msg, CreateCallBack(), caller);
+
+            while (!result.IsCompleted)
+            {
+                result.AsyncWaitHandle.WaitOne(10,false);
+                //Thread.Sleep(10);
+            }
+
+            // Call EndInvoke to wait for the asynchronous call to complete,
+            // and to retrieve the results.
+            caller.EndInvoke(result);
+        }
+
+        /// <summary>
+        /// Begin write to cache logger async.
+        /// </summary>
+        /// <param name="level"></param>
+        /// <param name="text"></param>
+        /// <returns></returns>
+        public IAsyncResult BeginLog(LoggerLevel level, string text)
+        {
+            return BeginLog(level, text);
+        }
+        /// <summary>
+        /// Begin write to cache logger async.
+        /// </summary>
+        /// <param name="state"></param>
+        /// <param name="callback"></param>
+        /// <param name="level"></param>
+        /// <param name="text"></param>
+        /// <returns></returns>
+        public IAsyncResult BeginLog(object state, AsyncCallback callback, LoggerLevel level, string text)
+        {
+
+            LogItemCallback caller = new LogItemCallback(LogItemWorker);
+
+            if (callback == null)
+            {
+                callback = CreateCallBack();
+            }
+
+            // Initiate the asychronous call.  Include an AsyncCallback
+            // delegate representing the callback method, and the data
+            // needed to call EndInvoke.
+            IAsyncResult result = caller.BeginInvoke(level, text, callback, caller);
+            //this.resetEvent.Set();
+            return result;
+        }
+
+
+        /// <summary>Completes the specified asynchronous receive operation.</summary>
+        /// <param name="asyncResult"></param>
+        /// <returns></returns>
+        public string EndLog(IAsyncResult asyncResult)
+        {
+            // Retrieve the delegate.
+            LogItemCallback caller = (LogItemCallback)asyncResult.AsyncState;
+
+            // Call EndInvoke to retrieve the results.
+            //caller.EndInvoke(asyncResult);
+
+            string msg = (string)caller.EndInvoke(asyncResult);
+            return msg;
+        }
+
+        private AsyncCallback CreateCallBack()
+        {
+            if (this.onRequestCompleted == null)
+            {
+                this.onRequestCompleted = new AsyncCallback(this.OnRequestCompleted);
+            }
+            return this.onRequestCompleted;
+        }
+
+
+        private void OnRequestCompleted(IAsyncResult asyncResult)
+        {
+            if (LogMessage != null)
+                OnLogMessage(new LogMessageEventArgs(this, asyncResult));
+        }
+
+        #endregion
+
+        #region writers
+
+        public void Exception(string message, Exception e, bool innerException, bool addStackTrace)
+        {
+            try
+            {
+                if (LogLevel.HasFlag(LoggerLevel.Error))
+                {
+
+                    StringBuilder sb = new StringBuilder();
+                    sb.AppendLine(message + " " + e.Message);
+
+                    if (innerException)
+                    {
+                        Exception innerEx = e == null ? null : e.InnerException;
+                        while (innerEx != null)
+                        {
+                            sb.Append(innerEx.Message);
+                            innerEx = innerEx.InnerException;
+                        }
+                    }
+                    if (addStackTrace)
+                    {
+                        sb.AppendLine();
+                        sb.AppendFormat("StackTrace:{0}", e.StackTrace);
+                    }
+                    WriteLine(DateTime.Now, LoggerLevel.Error, sb.ToString());
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Logger error LogException: {0}", ex.Message);
+            }
+        }
+               
+
+        internal void WriteLine(DateTime msgtime,LoggerLevel msglvl, string msg, bool consoleAswell = false)
         {
             string message;
-            DateTime msgtime = DateTime.Now;
+            //DateTime msgtime = DateTime.Now;
             string threadid = Thread.CurrentThread.GetHashCode().ToString();
             string threadName = Thread.CurrentThread.Name;
 
@@ -343,7 +609,7 @@ namespace Nistec.Logging
             if (LogMode.HasFlag(LoggerMode.File))
             {
                 string filename = GetFilename();
-                if (IsAsync)
+                if (AsyncFile)
                     WriteAsync(filename, message);
                 else
                     Write(filename, message);
@@ -358,7 +624,7 @@ namespace Nistec.Logging
 
         }
 
-        void WriteApi(DateTime msgtime, LoggerLevel msglvl, string message, string threadDisplay)
+        internal void WriteApi(DateTime msgtime, LoggerLevel msglvl, string message, string threadDisplay)
         {
             string json = @"{'Date':'" + msgtime.ToString("s") + "','Level':'" + Enum.Format(typeof(LoggerLevel), msglvl, "G") + "','App':'" + LogApp + "','Thread':'" + threadDisplay + "','Message':'" + HttpUtility.UrlEncode(message) + "'}";
 
@@ -421,11 +687,12 @@ namespace Nistec.Logging
                     {
                         // write is proceeding in the background.
                         // wait for the operation to complete
-                        while (!ar.IsCompleted)
-                        {
-                            //Console.Write('.');
-                            Thread.Sleep(10);
-                        }
+                        ar.AsyncWaitHandle.WaitOne(1000);
+                        //while (!ar.IsCompleted)
+                        //{
+                        //    //Console.Write('.');
+                        //    Thread.Sleep(10);
+                        //}
                     }
                     // harvest the result
                     m_ls.EndWrite(ar);
@@ -438,6 +705,7 @@ namespace Nistec.Logging
             }
         }
 
+        #endregion
 
         ///// <summary>
         ///// Writes specified text to log file.
