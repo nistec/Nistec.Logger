@@ -24,6 +24,7 @@ using System.Linq;
 using System.Text;
 using Nistec.Logging.Generic;
 using System.IO;
+using System.Reflection;
 
 namespace Nistec.Logging
 {
@@ -51,6 +52,41 @@ namespace Nistec.Logging
         public string CleanerFileEx { get; set; }
         public int CleanerDays { get; set; }
 
+        public static AsyncType GetAsyncTypeFlags(string asyncType, AsyncType defaultFlags = AsyncType.None)
+        {
+            AsyncType asyncType2 = defaultFlags;
+            if (!string.IsNullOrEmpty(asyncType))
+            {
+                AsyncType[] enumFlags = EnumExtension.GetEnumFlags(asyncType, AsyncType.None);
+                AsyncType[] array = enumFlags;
+                foreach (AsyncType asyncType3 in array)
+                {
+                    asyncType2 |= asyncType3;
+                }
+            }
+            return asyncType2;
+        }
+
+        public static string GetExecutingAssemblyPath()
+        {
+            return Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        }
+
+        public static string GetDefaultPath(string logName, bool logsFolder = true)
+        {
+            string text = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            if (logsFolder)
+            {
+                text = Path.Combine(text, "Logs");
+                DirectoryInfo directoryInfo = new DirectoryInfo(text);
+                if (!directoryInfo.Exists)
+                {
+                    directoryInfo.Create();
+                }
+            }
+            return Path.Combine(text, logName + ".log");
+        }
+
         public NetlogSettings(bool autoLoad)
         {
             AutoFlush = true;
@@ -61,11 +97,16 @@ namespace Nistec.Logging
             }
         }
 
+        public NetlogSettings(string logFilename, LoggerMode logMode = LoggerMode.File, LoggerLevel logLevel = LoggerLevel.All, LoggerRolling logRolling = LoggerRolling.Date, long maxFileSize = 2147483647L, string asyncTypes = "File|Invoke")
+        {
+            LoadSettings(logFilename, logMode, logLevel, logRolling, maxFileSize, 1000, asyncTypes);
+        }
+
         internal void SetLogApp()
         {
             LogApp = Path.GetFileNameWithoutExtension(LogFilename);
         }
-
+        
         public void LoadSettings(string logFilename)
         {
             LogFilename = logFilename;
@@ -87,7 +128,7 @@ namespace Nistec.Logging
             SetLogApp();
         }
 
-        public void LoadSettings(string logFilename, LoggerMode logMode, LoggerLevel logLevel, LoggerRolling logRolling, long maxFileSize, int bufferSize)
+        public void LoadSettings(string logFilename, LoggerMode logMode, LoggerLevel logLevel, LoggerRolling logRolling, long maxFileSize, int bufferSize, string asyncTypes = "None")
         {
             LogFilename = logFilename;
             LogMode = logMode;
@@ -95,9 +136,7 @@ namespace Nistec.Logging
             LogRolling = logRolling;
             MaxFileSize = maxFileSize;
             BufferSize = bufferSize;
-            //IsAsync = false;
-            AsyncType = AsyncType.None;
-
+            AsyncType = GetAsyncTypeFlags(asyncTypes);
             ApiUrl = null;
             ApiMethod = null;
             EnableApi = false;
@@ -107,6 +146,27 @@ namespace Nistec.Logging
             CleanerDays = 30;
             SetLogApp();
         }
+
+        //public void LoadSettings(string logFilename, LoggerMode logMode, LoggerLevel logLevel, LoggerRolling logRolling, long maxFileSize, int bufferSize)
+        //{
+        //    LogFilename = logFilename;
+        //    LogMode = logMode;
+        //    LogLevel = logLevel;
+        //    LogRolling = logRolling;
+        //    MaxFileSize = maxFileSize;
+        //    BufferSize = bufferSize;
+        //    //IsAsync = false;
+        //    AsyncType = AsyncType.None;
+
+        //    ApiUrl = null;
+        //    ApiMethod = null;
+        //    EnableApi = false;
+        //    AutoFlush = true;
+        //    CleanerDirectories = null;
+        //    CleanerFileEx = null;
+        //    CleanerDays = 30;
+        //    SetLogApp();
+        //}
 
         public void LoadSettings()
         {

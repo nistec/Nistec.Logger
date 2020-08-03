@@ -152,7 +152,7 @@ namespace Nistec.Logging
         {
             return (LogLevel.HasFlag(level));
         }
-
+        /*
         public void Log(LoggerLevel level, string message, params object[] args)
         {
             try
@@ -213,6 +213,72 @@ namespace Nistec.Logging
                 Console.WriteLine("Logger error WriteLog: {0}", ex.Message);
             }
         }
+        */
+
+        public void Log(LoggerLevel level, string message, params object[] args)
+        {
+            try
+            {
+                if (!IsEnabled(level))
+                {
+                    return;
+                }
+                if (AsyncService)
+                {
+                    if (args == null)
+                    {
+                        LogService.WriteLine(DateTime.Now, level, message);
+                    }
+                    else
+                    {
+                        LogService.WriteLine(DateTime.Now, level, string.Format(message, args));
+                    }
+                }
+                else if (AsyncInvoke)
+                {
+                    LogAsyncTask(level, message, args);
+                }
+                else if (args == null)
+                {
+                    WriteLine(DateTime.Now, level, message);
+                }
+                else
+                {
+                    WriteLine(DateTime.Now, level, string.Format(message, args));
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Logger error WriteLog: {0}", ex.Message);
+            }
+        }
+
+        internal void WriteInternal(LoggerLevel level, string message, params object[] args)
+        {
+            try
+            {
+                if (IsEnabled(level))
+                {
+                    if (AsyncInvoke)
+                    {
+                        LogAsyncTask(level, message, args);
+                    }
+                    else if (args == null)
+                    {
+                        WriteLine(DateTime.Now, level, message);
+                    }
+                    else
+                    {
+                        WriteLine(DateTime.Now, level, string.Format(message, args));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Logger error WriteLog: {0}", ex.Message);
+            }
+        }
+
 
         #region log service
 
@@ -239,29 +305,92 @@ namespace Nistec.Logging
         #endregion
 
         #region ctor
-        public Logger(bool autoLoad)
-            : this(autoLoad ? new NetlogSettings(true) : null)
+        /*
+    public Logger(bool autoLoad)
+        : this(autoLoad ? new NetlogSettings(true) : null)
+    {
+    }
+
+    public Logger(NetlogSettings settings)
+    {
+        _processid = Process.GetCurrentProcess().Id.ToString();
+        _processname = Process.GetCurrentProcess().MainModule.ModuleName;
+
+        if (settings != null)
         {
+            //Settings.LoadSettings();
+            LogMode = settings.LogMode;//0=none,11=console,12=file,13=both,5=trace,6=Exception
+            LogLevel = settings.LogLevel;
+            LogFilename = settings.LogFilename;
+            LogRolling = settings.LogRolling;
+            MaxSize = settings.MaxFileSize;
+            BufferSize = settings.BufferSize;
+            AutoFlush = settings.AutoFlush;
+            //IsAsync = settings.IsAsync;
+            AsyncType = settings.AsyncType;
+
+            LogApp = settings.LogApp;
+            apiUrl = settings.ApiUrl;
+            apiMethod = settings.ApiMethod;
+            enableApi = settings.EnableApi;
+        }
+        else
+        {
+            LogMode = LoggerMode.None;
+            LogLevel = LoggerLevel.None;
+            LogRolling = LoggerRolling.None;
+            LogFilename = null;
+            MaxSize = long.MaxValue;
+            BufferSize = 1000;
+            AutoFlush = true;
+            //IsAsync = false;
+            AsyncType = AsyncType.None;
+
+            LogApp = null;
+            apiUrl = null;
+            apiMethod = null;
+            enableApi = false;
+        }
+
+        AsyncService = (AsyncType.HasFlag(AsyncType.Service));
+        AsyncInvoke = (AsyncType.HasFlag(AsyncType.Invoke));
+        AsyncFile = (AsyncType.HasFlag(AsyncType.File));
+
+
+        if (MaxSize <= 0)
+            MaxSize = long.MaxValue;
+    }
+    */
+
+        public Logger(bool autoLoad)
+        {
+            LoggerInit(autoLoad ? new NetlogSettings(autoLoad: true) : null);
         }
 
         public Logger(NetlogSettings settings)
         {
+            LoggerInit(settings);
+        }
+
+        public Logger(string logFilename, LoggerMode logMode = LoggerMode.File, LoggerLevel logLevel = LoggerLevel.All, LoggerRolling logRolling = LoggerRolling.Date, long maxFileSize = 2147483647L, string asyncTypes = "File|Invoke")
+        {
+            NetlogSettings settings = new NetlogSettings(logFilename, logMode, logLevel, logRolling, maxFileSize, asyncTypes);
+            LoggerInit(settings);
+        }
+        private void LoggerInit(NetlogSettings settings)
+        {
             _processid = Process.GetCurrentProcess().Id.ToString();
             _processname = Process.GetCurrentProcess().MainModule.ModuleName;
-
             if (settings != null)
             {
-                //Settings.LoadSettings();
-                LogMode = settings.LogMode;//0=none,11=console,12=file,13=both,5=trace,6=Exception
+                LogMode = settings.LogMode;
                 LogLevel = settings.LogLevel;
                 LogFilename = settings.LogFilename;
                 LogRolling = settings.LogRolling;
                 MaxSize = settings.MaxFileSize;
                 BufferSize = settings.BufferSize;
                 AutoFlush = settings.AutoFlush;
-                //IsAsync = settings.IsAsync;
                 AsyncType = settings.AsyncType;
-
                 LogApp = settings.LogApp;
                 apiUrl = settings.ApiUrl;
                 apiMethod = settings.ApiMethod;
@@ -276,22 +405,19 @@ namespace Nistec.Logging
                 MaxSize = long.MaxValue;
                 BufferSize = 1000;
                 AutoFlush = true;
-                //IsAsync = false;
                 AsyncType = AsyncType.None;
-
                 LogApp = null;
                 apiUrl = null;
                 apiMethod = null;
                 enableApi = false;
             }
-
-            AsyncService = (AsyncType.HasFlag(AsyncType.Service));
-            AsyncInvoke = (AsyncType.HasFlag(AsyncType.Invoke));
-            AsyncFile = (AsyncType.HasFlag(AsyncType.File));
-
-
+            AsyncService = AsyncType.HasFlag(AsyncType.Service);
+            AsyncInvoke = AsyncType.HasFlag(AsyncType.Invoke);
+            AsyncFile = AsyncType.HasFlag(AsyncType.File);
             if (MaxSize <= 0)
+            {
                 MaxSize = long.MaxValue;
+            }
         }
         ~Logger()
         {
@@ -406,6 +532,33 @@ namespace Nistec.Logging
                 Console.WriteLine("Logger error Trace: {0}", ex.Message);
             }
         }
+        #endregion
+
+        #region async task
+
+        public void LogAsyncTask(LoggerLevel level, string message, params object[] args)
+        {
+            Task task = Task.Factory.StartNew(delegate
+            {
+                try
+                {
+                    if (IsEnabled(level))
+                    {
+                        if (args != null && args.Length != 0)
+                        {
+                            message = string.Format(message, args);
+                        }
+                        WriteLine(DateTime.Now, level, message);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Logger error LogAsyncTask: {0}", ex.Message);
+                }
+            });
+        }
+
+
         #endregion
 
         #region write aysnc

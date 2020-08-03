@@ -102,6 +102,7 @@
     <Compile Include="IO\Win32Io.cs" />
     <Compile Include="IO\Unsafe\LogStream.cs" />
     <Compile Include="IO\StreamLineReader.cs" />
+    <Compile Include="Logging\LoggerConsole.cs" />
     <Compile Include="Logging\LogMessageEventArgs.cs" />
     <Compile Include="Logging\LogService.cs" />
     <Compile Include="Logging\LoggingExtensions.cs" />
