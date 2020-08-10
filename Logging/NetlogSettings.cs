@@ -30,6 +30,12 @@ namespace Nistec.Logging
 {
     public class NetlogSettings
     {
+        public const string EXECPATH = "EXECPATH";
+
+        public static string GetExecutingLocation()
+        {
+            return Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        }
 
         public static readonly NetlogSettings Settings = new NetlogSettings(true);
 
@@ -130,6 +136,8 @@ namespace Nistec.Logging
 
         public void LoadSettings(string logFilename, LoggerMode logMode, LoggerLevel logLevel, LoggerRolling logRolling, long maxFileSize, int bufferSize, string asyncTypes = "None")
         {
+            if (logFilename.StartsWith(EXECPATH))
+                logFilename = logFilename.Replace(EXECPATH, GetExecutingLocation());
             LogFilename = logFilename;
             LogMode = logMode;
             LogLevel = logLevel;
@@ -240,6 +248,9 @@ namespace Nistec.Logging
             AsyncType = asyncFlags;
 
             //IsAsync = isAsync;
+
+            if (logFilename.StartsWith(EXECPATH))
+                logFilename = logFilename.Replace(EXECPATH,GetExecutingLocation());
 
             LogApp = Path.GetFileNameWithoutExtension(logFilename);
             LogFilename = logFilename;
