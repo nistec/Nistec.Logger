@@ -185,7 +185,7 @@ namespace Nistec.Logging.Generic
         ///               modFlags = modFlags | flg;
         ///            }
         ///       }
-        ///       LogMode = modFlags;
+        ///       //LogMode = modFlags;
         /// </example>
         public static T[] GetEnumFlags<T>(string flags, T DefaultValue)
         {

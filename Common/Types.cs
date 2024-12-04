@@ -1300,12 +1300,12 @@ namespace Nistec.Logging
 		{
 			return (new UnicodeEncoding()).GetString(byteArray);
 		}
-	
-		#endregion
 
-		#region Formats
+        #endregion
 
-		public struct BoolRange
+        #region Formats
+        #pragma warning disable 0649
+        public struct BoolRange
 		{
 			public object T;
 			public object F;
