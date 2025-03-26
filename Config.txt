@@ -1,5 +1,5 @@
 ﻿ <configSections>
-     <section name="Netlog" type="Nistec.Logging.NetlogConfig, Nistec.Logger, Version=4.6.1.0, Culture=neutral, PublicKeyToken=734a739868a76423" requirePermission="false"/>
+     <section name="Netlog" type="Nistec.Logging.NetlogConfig, Nistec.Logger, Version=4.7.2.0, Culture=neutral, PublicKeyToken=734a739868a76423" requirePermission="false"/>
   </configSections>
 
   <Netlog>
