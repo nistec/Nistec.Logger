@@ -322,7 +322,7 @@ namespace Nistec.Logging
         static Task<string> DoGetRequest(string address)
         {
             using (HttpClient client = new HttpClient() { Timeout = TimeSpan.FromSeconds(20) })
-            using (HttpResponseMessage response = client.GetAsync(address).Result)
+            using (HttpResponseMessage response = client.GetAsync(address).GetAwaiter().GetResult())
             using (HttpContent content = response.Content)
             {
                 return content.ReadAsStringAsync();
